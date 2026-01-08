@@ -5,12 +5,27 @@
 #include "../include/Window.hpp"
 #include <filesystem>
 #include <iostream>
+#include <random>
+#include <thread>
+#include <vector>
 
-constexpr int NUM_RECTS_PER_ITERATION = 100;
+constexpr int NUM_RECTS_PER_ITERATION = 1000;
 constexpr int MAX_ITERATIONS = 10000;
 
-constexpr int MAX_START_SIZE = 200;
+constexpr int MAX_START_SIZE = 100;
 constexpr int MIN_END_SIZE = 1;
+
+thread_local std::mt19937 rng(std::random_device{}());
+
+int RandInt(int min, int max) {
+  std::uniform_int_distribution<int> dist(min, max);
+  return dist(rng);
+}
+
+struct ThreadResult {
+  float bestError = -1e30f;
+  int bestIndex = -1;
+};
 
 struct ColorRect {
   Rectangle rec;
@@ -60,11 +75,11 @@ ColorRect GenerateRandomRect(int w,int h, Image original, float iteration) {
 
   Rectangle rec;
 
-  rec.x = rand() % (w-MIN_END_SIZE);
-  rec.y = rand() % (h-MIN_END_SIZE);
+  rec.x = RandInt(0, w-MIN_END_SIZE - 1);
+  rec.y = RandInt(0, h-MIN_END_SIZE - 1);
 
-  rec.width = rand() % std::min(int(w-rec.x - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
-  rec.height = rand() % std::min(int(h-rec.y - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
+  rec.width = RandInt(MIN_END_SIZE, std::min(int(w-rec.x - MIN_END_SIZE), maxSize - MIN_END_SIZE));
+  rec.height = RandInt(MIN_END_SIZE, std::min(int(h-rec.y - MIN_END_SIZE), maxSize - MIN_END_SIZE));
 
   if (rec.width == 0 || rec.height == 0) {
     std::cout << "heheheha\n";
@@ -159,7 +174,7 @@ int main() {
   ImageResize(&orgImg, w, h);
 
   RenderTexture2D currentTex = LoadRenderTexture(w, h);
-  SetTargetFPS(60);
+  SetTargetFPS(120);
 
   Image currentImg = LoadImageFromTexture(currentTex.texture);
   int iteration = 0;
@@ -173,23 +188,54 @@ int main() {
       EndDrawing();
       continue;
     }
-    float besterror = 1e-9f;
-    int bestrect = 0;
     std::array<ColorRect, NUM_RECTS_PER_ITERATION> rects;
-    for (int i = 0; i < NUM_RECTS_PER_ITERATION; i++) {
-      float d = 0;
-      try {
+
+    int numThreads = std::thread::hardware_concurrency();
+    numThreads = std::max(1, numThreads);
+
+    std::vector<ThreadResult> results(numThreads);
+    std::vector<std::thread> threads;
+
+    int chunkSize = NUM_RECTS_PER_ITERATION / numThreads;
+
+    auto worker = [&](int tid, int start, int end) {
+      ThreadResult local;
+
+      for (int i = start; i < end; i++) {
         rects[i] = GenerateRandomRect(w, h, orgImg, (float)iteration);
-        d = RectangleDeltaError(rects[i], currentImg, orgImg);
-      } catch (int err) {
-        std::cout << "pranked, SIG: " << err << "\n";
+        float d = RectangleDeltaError(rects[i], currentImg, orgImg);
+
+        if (d > local.bestError) {
+          local.bestError = d;
+          local.bestIndex = i;
+        }
       }
-      if (d > besterror) {
-        besterror = d;
-        bestrect = i;
+
+      results[tid] = local;
+    };
+
+    for (int t = 0; t < numThreads; t++) {
+      int start = t * chunkSize;
+      int end = (t == numThreads - 1)
+        ? NUM_RECTS_PER_ITERATION
+        : start + chunkSize;
+
+      threads.emplace_back(worker, t, start, end);
+    }
+
+    for (auto& t : threads) {
+      t.join();
+    }
+
+    float besterror = -1e30f;
+    int bestrect = 0;
+
+    for (const auto& r : results) {
+      if (r.bestIndex >= 0 && r.bestError > besterror) {
+        besterror = r.bestError;
+        bestrect = r.bestIndex;
       }
     }
-    std::cout << besterror << "\n";
     
     ImageDrawRectangleRec(&currentImg, rects[bestrect].rec, rects[bestrect].c);
     UpdateTexture(currentTex.texture, currentImg.data);
