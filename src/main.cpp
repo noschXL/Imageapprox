@@ -15,6 +15,11 @@ constexpr int MAX_ITERATIONS = 10000;
 constexpr int MAX_START_SIZE = 100;
 constexpr int MIN_END_SIZE = 1;
 
+constexpr float SCALE = 0.7;
+
+constexpr int SCREENWIDTH = 1366;
+constexpr int SCREENHEIGHT = 768;
+
 thread_local std::mt19937 rng(std::random_device{}());
 
 int RandInt(int min, int max) {
@@ -159,17 +164,15 @@ void DebugColorRect (ColorRect rec) {
 int main() {
   std::cout << "CWD: " << std::filesystem::current_path() << "\n";
   srand(time(0));
-  int screenWidth = 1366;
-  int screenHeight = 768;
 
-  raylib::Window window(screenWidth, screenHeight, "raylib-cpp - basic window");
+  raylib::Window window(SCREENWIDTH, SCREENHEIGHT, "raylib-cpp - basic window");
 
   window.SetFullscreen(true);
 
   Image orgImg = LoadImage("input.png");
 
-  int w = orgImg.width / 1.5;
-  int h = orgImg.height / 1.5;
+  int w = orgImg.width * SCALE;
+  int h = orgImg.height * SCALE;
 
   ImageResize(&orgImg, w, h);
 
