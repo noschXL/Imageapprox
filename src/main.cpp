@@ -6,10 +6,10 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr int NUM_RECTS_PER_ITERATION = 100;
+constexpr int NUM_RECTS_PER_ITERATION = 200;
 constexpr int MAX_ITERATIONS = 3000;
 
-constexpr int MAX_START_SIZE = 300;
+constexpr int MAX_START_SIZE = 1300;
 constexpr int MIN_END_SIZE = 25;
 
 struct ColorRect {
@@ -57,11 +57,11 @@ ColorRect GenerateRandomRect(int w,int h, Image original, float iteration) {
 
   Rectangle rec;
 
-  rec.x = rand() % w;
-  rec.y = rand() % h;
+  rec.x = rand() % (w-MIN_END_SIZE);
+  rec.y = rand() % (h-MIN_END_SIZE);
 
-  rec.width = rand() % int(w-rec.x) % maxSize;
-  rec.height = rand() % int(h-rec.y) % maxSize;
+  rec.width = rand() % std::min(int(w-rec.x - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
+  rec.height = rand() % std::min(int(h-rec.y - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
 
   ColorRect crect;
   crect.rec=rec;
@@ -69,18 +69,27 @@ ColorRect GenerateRandomRect(int w,int h, Image original, float iteration) {
 
   return crect;
 }
-int RectangleDeltaError(ColorRect rect, Image current, Image original) {
+
+void ColorDebug(Color col) {
+  std::cout << "r: " << (int)col.r << " g: " << (int)col.g << " b: " << (int)col.b << "\n";
+}
+
+float RectangleDeltaError(ColorRect rect, Image current, Image original, bool debug = false) {
   int delta = 0;
+  float aera = rect.rec.width * rect.rec.height;
 
   for (int x = rect.rec.x; x < rect.rec.x + rect.rec.width; x++) {
     for (int y = rect.rec.y; y < rect.rec.y + rect.rec.height; y++) {
 
       Color cur = GetImageColor(current, x, y);
+      if (debug) {
+        ColorDebug(cur);
+      }
       Color org = GetImageColor(original, x, y);
 
       int before =
         (cur.r - org.r) * (cur.r - org.r) +
-        (cur.g - org.g) * (cur.g - org.g) +
+        (cur.g - org.g) * (cur.g - org.g )+
         (cur.b - org.b) * (cur.b - org.b);
 
       int after =
@@ -91,7 +100,7 @@ int RectangleDeltaError(ColorRect rect, Image current, Image original) {
       delta += before - after;
     }
   }
-  return delta;
+  return (float)delta / aera;
 }
 
 int RectangleError(ColorRect rect, Image current) {
@@ -111,20 +120,20 @@ int RectangleError(ColorRect rect, Image current) {
 
 void DebugColorRect (ColorRect rec) {
   std::cout << "x: " << rec.rec.x
-            << "y: " << rec.rec.y
-            << "w: " << rec.rec.width
-            << "h: " << rec.rec.height
-            << "r: " << rec.c.r
-            << "g: " << rec.c.g
-            << "b: " << rec.c.b
+            << " y: " << rec.rec.y
+            << " w: " << rec.rec.width
+            << " h: " << rec.rec.height
+            << " r: " << (int)rec.c.r
+            << " g: " << (int)rec.c.g
+            << " b: " << (int)rec.c.b
             << "\n";
 }
 
 int main() {
   std::cout << "CWD: " << std::filesystem::current_path() << "\n";
   srand(time(0));
-  int screenWidth = 1980;
-  int screenHeight = 1080;
+  int screenWidth = 1366;
+  int screenHeight = 768;
 
   raylib::Window window(screenWidth, screenHeight, "raylib-cpp - basic window");
 
@@ -132,8 +141,8 @@ int main() {
 
   Image orgImg = LoadImage("input.png");
 
-  int w = orgImg.width / 4;
-  int h = orgImg.height / 4;
+  int w = orgImg.width / 1.5;
+  int h = orgImg.height / 1.5;
 
   ImageResize(&orgImg, w, h);
 
@@ -145,25 +154,28 @@ int main() {
 
 
   while (!window.ShouldClose()) {
-    currentImg = LoadImageFromTexture(currentTex.texture);
-
-    int besterror = 0;
+    if (iteration >= MAX_ITERATIONS) {
+      BeginDrawing();
+      ClearBackground(BLACK);
+      DrawTexture(currentTex.texture, 0, 0, WHITE);
+      EndDrawing();
+      continue;
+    }
+    float besterror = 1e-9f;
     int bestrect = 0;
     std::array<ColorRect, NUM_RECTS_PER_ITERATION> rects;
     for (int i = 0; i < NUM_RECTS_PER_ITERATION; i++) {
       rects[i] = GenerateRandomRect(w, h, orgImg, (float)iteration);
-      int d = RectangleDeltaError(rects[i], currentImg, orgImg);
+      float d = RectangleDeltaError(rects[i], currentImg, orgImg);
       if (d > besterror) {
         besterror = d;
         bestrect = i;
       }
     }
-
-    BeginTextureMode(currentTex);
-    DrawRectangleRec(rects[bestrect].rec, rects[bestrect].c);
-    EndTextureMode();
-
-    DebugColorRect(rects[bestrect]);
+    std::cout << besterror << "\n";
+    
+    ImageDrawRectangleRec(&currentImg, rects[bestrect].rec, rects[bestrect].c);
+    UpdateTexture(currentTex.texture, currentImg.data);
 
 
     BeginDrawing();
@@ -171,7 +183,6 @@ int main() {
     DrawTexture(currentTex.texture, 0, 0, WHITE);
     EndDrawing();
 
-    ImageDrawRectangleRec(&currentImg, rects[bestrect].rec, rects[bestrect].c);
 
     iteration++;
     std::cout << iteration << "\n";
