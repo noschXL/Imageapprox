@@ -6,11 +6,11 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr int NUM_RECTS_PER_ITERATION = 200;
-constexpr int MAX_ITERATIONS = 3000;
+constexpr int NUM_RECTS_PER_ITERATION = 100;
+constexpr int MAX_ITERATIONS = 10000;
 
-constexpr int MAX_START_SIZE = 1300;
-constexpr int MIN_END_SIZE = 25;
+constexpr int MAX_START_SIZE = 200;
+constexpr int MIN_END_SIZE = 1;
 
 struct ColorRect {
   Rectangle rec;
@@ -34,6 +34,9 @@ Color GetBestRectColor(Rectangle rec, Image original) {
   }
 
   Color c;
+  if (pixelcount == 0) {
+    std::cout << "pixelcount is 0\n";
+  }
   c.r = (unsigned char)(rsum / pixelcount);
   c.g = (unsigned char)(gsum / pixelcount);
   c.b = (unsigned char)(bsum / pixelcount);
@@ -50,10 +53,10 @@ int lerp(int a, int b, float t) {
 ColorRect GenerateRandomRect(int w,int h, Image original, float iteration) {
 
   float delta = iteration / MAX_ITERATIONS;
-  delta = delta*delta;
+  delta = delta*delta*delta;
 
   int maxSize = MAX_START_SIZE * powf((float)MIN_END_SIZE / MAX_START_SIZE, delta);
-  maxSize = std::clamp(maxSize, 1, MAX_START_SIZE);
+  maxSize = std::clamp(maxSize, MIN_END_SIZE+1, MAX_START_SIZE);
 
   Rectangle rec;
 
@@ -63,9 +66,18 @@ ColorRect GenerateRandomRect(int w,int h, Image original, float iteration) {
   rec.width = rand() % std::min(int(w-rec.x - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
   rec.height = rand() % std::min(int(h-rec.y - MIN_END_SIZE), maxSize - MIN_END_SIZE) + MIN_END_SIZE;
 
+  if (rec.width == 0 || rec.height == 0) {
+    std::cout << "heheheha\n";
+  }
+
   ColorRect crect;
   crect.rec=rec;
   crect.c = GetBestRectColor(rec, original);
+  
+  if (rec.width == 0 || rec.height == 0) {
+    std::cout << "heheheha\n";
+    crect = GenerateRandomRect(w, h, original, iteration);
+  }
 
   return crect;
 }
@@ -100,7 +112,7 @@ float RectangleDeltaError(ColorRect rect, Image current, Image original, bool de
       delta += before - after;
     }
   }
-  return (float)delta / aera;
+  return (float)delta - aera;
 }
 
 int RectangleError(ColorRect rect, Image current) {
@@ -165,8 +177,13 @@ int main() {
     int bestrect = 0;
     std::array<ColorRect, NUM_RECTS_PER_ITERATION> rects;
     for (int i = 0; i < NUM_RECTS_PER_ITERATION; i++) {
-      rects[i] = GenerateRandomRect(w, h, orgImg, (float)iteration);
-      float d = RectangleDeltaError(rects[i], currentImg, orgImg);
+      float d = 0;
+      try {
+        rects[i] = GenerateRandomRect(w, h, orgImg, (float)iteration);
+        d = RectangleDeltaError(rects[i], currentImg, orgImg);
+      } catch (int err) {
+        std::cout << "pranked, SIG: " << err << "\n";
+      }
       if (d > besterror) {
         besterror = d;
         bestrect = i;
