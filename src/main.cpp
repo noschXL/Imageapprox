@@ -9,13 +9,13 @@
 #include <thread>
 #include <vector>
 
-constexpr int NUM_RECTS_PER_ITERATION = 1000;
-constexpr int MAX_ITERATIONS = 10000;
+constexpr int NUM_RECTS_PER_ITERATION = 200;
+constexpr int MAX_ITERATIONS = 20000;
 
-constexpr int MAX_START_SIZE = 100;
+constexpr int MAX_START_SIZE = 200;
 constexpr int MIN_END_SIZE = 1;
 
-constexpr float SCALE = 0.7;
+constexpr float SCALE = 0.333;
 
 constexpr int SCREENWIDTH = 1366;
 constexpr int SCREENHEIGHT = 768;
@@ -132,7 +132,7 @@ float RectangleDeltaError(ColorRect rect, Image current, Image original, bool de
       delta += before - after;
     }
   }
-  return (float)delta - aera;
+  return (float)delta;
 }
 
 int RectangleError(ColorRect rect, Image current) {
